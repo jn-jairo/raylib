@@ -44,16 +44,11 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "raylib [audio] example - stream recording");
 
     InitAudioDevice();
-    InitAudioRecordingDevice();
-    // InitAudioRecordingDeviceEx(24000, 16, 1);
 
-    // Configure it so that RecordingCallback is called whenever new samples are read from the microphone
-    SetAudioRecordingCallback(RecordingCallback);
-
-    // Configure the wave to match the recording
-    wave.sampleRate = GetAudioRecordingSampleRate();
-    wave.sampleSize = GetAudioRecordingSampleSize();
-    wave.channels = GetAudioRecordingChannels();
+    // Configure the wave
+    wave.sampleRate = 44100;
+    wave.sampleSize = 32;
+    wave.channels = 2;
 
     // Allocate buffer for the audio recording
     maxFrameCount = wave.sampleRate*5; // 5 seconds
@@ -90,7 +85,7 @@ int main(void)
                 StopSound(sound);
                 wave.frameCount = 0;
 
-                StartAudioRecording();
+                StartAudioRecording(wave.sampleRate, wave.sampleSize, wave.channels, RecordingCallback);
             }
         }
 
@@ -118,7 +113,7 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    CloseAudioRecordingDevice(); // Close audio recording device (recording is automatically stopped)
+    if (IsAudioRecording()) StopAudioRecording(); // Close audio recording device
     CloseAudioDevice();          // Close audio device (music streaming is automatically stopped)
 
     UnloadSound(sound);

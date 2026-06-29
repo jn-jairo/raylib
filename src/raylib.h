@@ -1676,17 +1676,7 @@ RLAPI void SetMasterVolume(float volume);                             // Set mas
 RLAPI float GetMasterVolume(void);                                    // Get master volume (listener)
 
 // Audio recording device management functions
-RLAPI void InitAudioRecordingDevice(void);                            // Initialize audio recording device
-RLAPI void InitAudioRecordingDeviceEx(unsigned int sampleRate, unsigned int sampleSize, unsigned int channels); // Initialize audio recording device with custom sampleRate, sampleSize and channels
-RLAPI void CloseAudioRecordingDevice(void);                           // Close the audio recording device for all contexts
-RLAPI bool IsAudioRecordingDeviceReady(void);                         // Check if recording device has been initialized successfully
-RLAPI unsigned int GetAudioRecordingSampleRate(void);                 // Get recording sample rate
-RLAPI unsigned int GetAudioRecordingSampleSize(void);                 // Get recording sample size in bits
-RLAPI unsigned int GetAudioRecordingChannels(void);                   // Get recording channels
-RLAPI void SetMasterRecordingVolume(float volume);                    // Set master volume (recording)
-RLAPI float GetMasterRecordingVolume(void);                           // Get master volume (recording)
-RLAPI void SetAudioRecordingCallback(AudioRecordingCallback callback); // Audio recording callback to receive new data
-RLAPI void StartAudioRecording(void);                                 // Start audio recording
+RLAPI void StartAudioRecording(unsigned int sampleRate, unsigned int sampleSize, unsigned int channels, AudioRecordingCallback callback); // Start audio recording
 RLAPI void StopAudioRecording(void);                                  // Stop audio recording
 RLAPI bool IsAudioRecording(void);                                    // Check if device is recording
 

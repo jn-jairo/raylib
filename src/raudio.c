@@ -393,7 +393,6 @@ typedef struct AudioData {
     struct {
         ma_context context;         // miniaudio context data
         ma_device device;           // miniaudio device
-        ma_mutex lock;              // miniaudio mutex lock
         bool isReady;               // Check if audio device is ready
         AudioRecordingCallback callback; // Recording callback function
     } RecordingSystem;
@@ -2381,8 +2380,8 @@ void DetachAudioMixedProcessor(AudioCallback process)
 // Module Functions Definition - Audio Recording Device initialization and closing
 //----------------------------------------------------------------------------------
 
-// Initialize audio recording device with custom sampleRate, sampleSize and channels
-void InitAudioRecordingDeviceEx(unsigned int sampleRate, unsigned int sampleSize, unsigned int channels)
+// Start audio recording
+void StartAudioRecording(unsigned int sampleRate, unsigned int sampleSize, unsigned int channels, AudioRecordingCallback callback)
 {
     // Init audio context
     ma_context_config ctxConfig = ma_context_config_init();
@@ -2417,12 +2416,12 @@ void InitAudioRecordingDeviceEx(unsigned int sampleRate, unsigned int sampleSize
         return;
     }
 
-    // Recording happens on a separate thread which means synchronization is needed
-    // A mutex is used here to make things simple, but may want to look at something
-    // a bit smarter later on to keep everything real-time, if that's necessary
-    if (ma_mutex_init(&AUDIO.RecordingSystem.lock) != MA_SUCCESS)
+    AUDIO.RecordingSystem.callback = callback;
+
+    result = ma_device_start(&AUDIO.RecordingSystem.device);
+    if (result != MA_SUCCESS)
     {
-        TRACELOG(LOG_WARNING, "AUDIO: Failed to create mutex for recording");
+        TRACELOG(LOG_WARNING, "AUDIO: Failed to start recording device");
         ma_device_uninit(&AUDIO.RecordingSystem.device);
         ma_context_uninit(&AUDIO.RecordingSystem.context);
         return;
@@ -2438,19 +2437,11 @@ void InitAudioRecordingDeviceEx(unsigned int sampleRate, unsigned int sampleSize
     AUDIO.RecordingSystem.isReady = true;
 }
 
-// Initialize audio recording device
-void InitAudioRecordingDevice(void)
-{
-    unsigned int sampleSize = ((AUDIO_DEVICE_FORMAT == ma_format_u8)? 8 : ((AUDIO_DEVICE_FORMAT == ma_format_s16)? 16 : 32));
-    InitAudioRecordingDeviceEx(AUDIO_DEVICE_SAMPLE_RATE, sampleSize, AUDIO_DEVICE_CHANNELS);
-}
-
-// Close the audio recording device for all contexts
-void CloseAudioRecordingDevice(void)
+// Stop audio recording
+void StopAudioRecording(void)
 {
     if (AUDIO.RecordingSystem.isReady)
     {
-        ma_mutex_uninit(&AUDIO.RecordingSystem.lock);
         ma_device_uninit(&AUDIO.RecordingSystem.device);
         ma_context_uninit(&AUDIO.RecordingSystem.context);
 
@@ -2461,98 +2452,10 @@ void CloseAudioRecordingDevice(void)
     else TRACELOG(LOG_WARNING, "AUDIO: Recording device could not be closed, not currently initialized");
 }
 
-// Check if recording device has been initialized successfully
-bool IsAudioRecordingDeviceReady(void)
-{
-    return AUDIO.RecordingSystem.isReady;
-}
-
-// Get recording sample rate
-unsigned int GetAudioRecordingSampleRate(void)
-{
-    if (!AUDIO.RecordingSystem.isReady) return 0;
-
-    return AUDIO.RecordingSystem.device.sampleRate;
-}
-
-// Get recording sample size in bits
-unsigned int GetAudioRecordingSampleSize(void)
-{
-    if (!AUDIO.RecordingSystem.isReady) return 0;
-
-    return 8 * ma_get_bytes_per_sample(AUDIO.RecordingSystem.device.capture.format);
-}
-
-// Get recording channels
-unsigned int GetAudioRecordingChannels(void)
-{
-    if (!AUDIO.RecordingSystem.isReady) return 0;
-
-    return AUDIO.RecordingSystem.device.capture.channels;
-}
-
-// Set master volume (recording)
-void SetMasterRecordingVolume(float volume)
-{
-    ma_device_set_master_volume(&AUDIO.RecordingSystem.device, volume);
-}
-
-// Get master volume (recording)
-float GetMasterRecordingVolume(void)
-{
-    float volume = 0.0f;
-    ma_device_get_master_volume(&AUDIO.RecordingSystem.device, &volume);
-    return volume;
-}
-
-// Audio recording callback to receive new data
-void SetAudioRecordingCallback(AudioRecordingCallback callback)
-{
-    ma_mutex_lock(&AUDIO.RecordingSystem.lock);
-    AUDIO.RecordingSystem.callback = callback;
-    ma_mutex_unlock(&AUDIO.RecordingSystem.lock);
-}
-
-// Start audio recording
-void StartAudioRecording(void)
-{
-    if (!AUDIO.RecordingSystem.isReady)
-    {
-        TRACELOG(LOG_WARNING, "AUDIO: Recording device could not be started, not currently initialized");
-        return;
-    }
-
-    ma_result result = ma_device_start(&AUDIO.RecordingSystem.device);
-    if (result != MA_SUCCESS)
-    {
-        TRACELOG(LOG_WARNING, "AUDIO: Failed to start recording device");
-        return;
-    }
-}
-
-// Stop audio recording
-void StopAudioRecording(void)
-{
-    if (!AUDIO.RecordingSystem.isReady)
-    {
-        TRACELOG(LOG_WARNING, "AUDIO: Recording device could not be stopped, not currently initialized");
-        return;
-    }
-
-    ma_result result = ma_device_stop(&AUDIO.RecordingSystem.device);
-    if (result != MA_SUCCESS)
-    {
-        TRACELOG(LOG_WARNING, "AUDIO: Failed to stop recording device");
-        return;
-    }
-}
-
 // Check if device is recording
 bool IsAudioRecording(void)
 {
-    if (!AUDIO.RecordingSystem.isReady) return false;
-
-    return ma_device_is_started(&AUDIO.RecordingSystem.device);
+    return AUDIO.RecordingSystem.isReady;
 }
 
 //----------------------------------------------------------------------------------
@@ -2843,16 +2746,7 @@ static void OnSendAudioDataToDevice(ma_device *pDevice, void *pFramesOut, const 
 // This function will be called when miniaudio sends more data
 static void OnReceiveAudioDataFromDevice(ma_device *pDevice, void *pFramesOut, const void *pFramesInput, ma_uint32 frameCount)
 {
-    AudioRecordingCallback callback = NULL;
-
-    ma_mutex_lock(&AUDIO.RecordingSystem.lock);
-    callback = AUDIO.RecordingSystem.callback;
-    ma_mutex_unlock(&AUDIO.RecordingSystem.lock);
-
-    if (callback)
-    {
-        callback(pFramesInput, frameCount);
-    }
+    AUDIO.RecordingSystem.callback(pFramesInput, frameCount);
 }
 
 // Main mixing function, pretty simple in this project, only an accumulation
